@@ -1,4 +1,4 @@
-name: "aws-s3-build"
+name: "aws-s3-deploy"
 
 on:
   #push:
