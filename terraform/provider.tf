@@ -9,7 +9,7 @@ terraform {
   backend "s3" {
     bucket  = "tfstategit"
     key     = "s3-bucket-terraform.tfstate"
-    region  =  var.region
+    region  =  "us-east-1"
     encrypt = true
   }
 }
@@ -17,7 +17,7 @@ terraform {
 
 provider "aws" {
 
-  region = var.region
+  region = "us-east-1"
 
 }
 
