@@ -27,6 +27,8 @@ module "source_bucket" {
           prefix = ""
         }
 
+        delete_marker_replication = false
+
         destination = {
           bucket        = module.destination_bucket.s3_bucket_arn
           storage_class = "STANDARD"
