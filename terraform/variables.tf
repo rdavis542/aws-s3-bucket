@@ -1,6 +1,7 @@
 variable "region" {
   type        = string
   description = "region you want to use"
+  default = "us-east-1"
 }
 
 variable "default_tags" {
