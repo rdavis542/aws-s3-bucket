@@ -20,3 +20,15 @@ provider "aws" {
   region = var.region
 
 }
+
+# Configure the primary region provider
+provider "aws" {
+  region = "us-east-2"
+  alias  = "primary"
+}
+
+# Configure the replica region provider
+provider "aws" {
+  region = "us-west-2"
+  alias  = "replica"
+}
