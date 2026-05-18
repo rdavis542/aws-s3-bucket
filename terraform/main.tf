@@ -27,6 +27,8 @@ module "source_bucket" {
           prefix = ""
         }
 
+        delete_marker_replication = false
+
         destination = {
           bucket        = module.destination_bucket.s3_bucket_arn
           storage_class = "STANDARD"
@@ -39,6 +41,9 @@ module "source_bucket" {
       }
     ]
   }
+
+# Explicit dependency to ensure destination bucket is fully created first
+  depends_on = [module.destination_bucket]
 
   # Server-side encryption
   server_side_encryption_configuration = {
