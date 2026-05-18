@@ -7,16 +7,16 @@ terraform {
     }
   }
   backend "s3" {
-    bucket  = "tfstategit"
-    key     = "s3-bucket-terraform.tfstate"
-    region  =  "us-east-1"
+    bucket  = "tf-state-replication-source-350726165848"
+    key     = "terraform-s3-bucket.tfstate"
+    region  = "us-east-2"
     encrypt = true
   }
 }
 
 
 provider "aws" {
-  region = "us-east-1"
+  region = var.region
 
   default_tags {
     tags = {
@@ -26,6 +26,7 @@ provider "aws" {
       Repository  = "aws-s3-bucket"
       Owner       = "ryan_davis542@outlook.com"
       CostCenter  = "Personal"
+      Region      = var.region
     }
   }
 }
@@ -43,6 +44,7 @@ provider "aws" {
       Repository  = "aws-s3-bucket"
       Owner       = "ryan_davis542@outlook.com"
       CostCenter  = "Personal"
+      Region      = "us-east-2"
     }
   }
 }
@@ -60,6 +62,7 @@ provider "aws" {
       Repository  = "aws-s3-bucket"
       Owner       = "ryan_davis542@outlook.com"
       CostCenter  = "Personal"
+      Region      = "us-west-2"
     }
   }
 }

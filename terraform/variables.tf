@@ -1,7 +1,7 @@
 variable "region" {
   type        = string
-  description = "region you want to use"
-  default = "us-east-1"
+  description = "AWS region for the default provider"
+  default     = "us-east-2"
 }
 
 variable "primary_region" {
