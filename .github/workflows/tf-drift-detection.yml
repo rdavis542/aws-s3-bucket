@@ -1,0 +1,142 @@
+name: "Terraform Drift Detection"
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+# Prevent concurrent runs
+concurrency:
+  group: terraform-drift
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  AWS_REPLICA_REGION: us-west-2
+  TF_VERSION: 1.9.8
+
+jobs:
+  detect-drift:
+    name: "Detect Infrastructure Drift"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Cache Terraform plugins
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.terraform.d/plugin-cache
+          terraform/.terraform
+        key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-terraform-
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Plan (Detect Drift)
+      id: plan
+      run: |
+        terraform plan -detailed-exitcode -no-color -out=drift.tfplan 2>&1 | tee plan-output.txt
+      continue-on-error: true
+
+    - name: Check for drift
+      id: drift
+      run: |
+        # Exit code 0 = no changes, 1 = error, 2 = changes detected
+        # continue-on-error means outcome is always "success", so check exitcode directly
+        if [ "${{ steps.plan.outputs.exitcode }}" -eq 2 ]; then
+          echo "drift_detected=true" >> $GITHUB_OUTPUT
+          echo "Drift detected!"
+        elif [ "${{ steps.plan.outputs.exitcode }}" -eq 1 ]; then
+          echo "drift_detected=error" >> $GITHUB_OUTPUT
+          echo "Error running plan"
+        else
+          echo "drift_detected=false" >> $GITHUB_OUTPUT
+          echo "No drift detected"
+        fi
+
+    - name: Generate drift report
+      if: steps.drift.outputs.drift_detected == 'true'
+      run: |
+        echo "## :warning: Infrastructure Drift Detected" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Differences have been detected between the Terraform state and actual AWS infrastructure." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Changes Detected:" >> $GITHUB_STEP_SUMMARY
+        echo '```terraform' >> $GITHUB_STEP_SUMMARY
+        cat plan-output.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Action Required**: Review the changes and update your Terraform code or manually reconcile the infrastructure." >> $GITHUB_STEP_SUMMARY
+
+    - name: Create GitHub Issue for drift
+      if: steps.drift.outputs.drift_detected == 'true'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const planOutput = fs.readFileSync('terraform/plan-output.txt', 'utf8');
+
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🚨 Infrastructure Drift Detected - ${new Date().toISOString().split('T')[0]}`,
+            body: `## Infrastructure Drift Alert
+
+          Drift has been detected between your Terraform configuration and the actual AWS infrastructure.
+
+          ### Details
+          - **Detection Time**: ${new Date().toISOString()}
+          - **Workflow Run**: [View Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+          - **Region**: ${process.env.AWS_REGION}
+
+          ### Detected Changes
+          \`\`\`terraform
+          ${planOutput}
+          \`\`\`
+
+          ### Recommended Actions
+          1. Review the changes above
+          2. Determine if infrastructure was manually modified
+          3. Update Terraform code to match desired state OR
+          4. Apply Terraform to reconcile infrastructure
+
+          ---
+          *This issue was automatically created by the drift detection workflow.*`,
+            labels: ['infrastructure', 'drift-detection', 'needs-review']
+          });
+
+          console.log(`Created issue #${issue.data.number}`);
+
+    - name: Success notification
+      if: steps.drift.outputs.drift_detected == 'false'
+      run: |
+        echo "## ✅ No Infrastructure Drift Detected" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Your infrastructure matches the Terraform configuration." >> $GITHUB_STEP_SUMMARY
+        echo "**Last Checked**: $(date -u)" >> $GITHUB_STEP_SUMMARY
