@@ -20,6 +20,10 @@ concurrency:
 jobs:
   terraform:
     uses: rdavis542/aws-github-workflows/.github/workflows/tf-plan-apply.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
     with:
       aws_region: us-east-2
       tf_vars: '{"bucket_prefix":"example-bucket-test"}'
